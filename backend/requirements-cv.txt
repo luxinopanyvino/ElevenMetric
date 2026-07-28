@@ -1,0 +1,6 @@
+# ElevenMetric — optional computer-vision extras.
+# The API works without these; video jobs simply report engine="simulated".
+-r requirements.txt
+opencv-python-headless>=4.9
+ultralytics>=8.2          # YOLO detection + pose (pitch keypoints)
+scipy>=1.11               # Hungarian assignment for the tracker
