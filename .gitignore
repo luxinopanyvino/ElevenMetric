@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local data: the database, uploaded media and fitted model artefacts are all
+# regenerable (`python -m app.db.seed --reset`) and must not be committed.
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/media/
+data/models/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
