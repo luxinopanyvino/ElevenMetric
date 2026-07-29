@@ -99,39 +99,95 @@ UNAVAILABLE = {
     "Iñigo Martínez": "Adductor — out 3 weeks",
 }
 
+#: Headline archetype per role bucket. Detail attributes are derived from these.
 ATTRIBUTE_PROFILES: dict[str, dict[str, int]] = {
-    "GK":  {"pace": 55, "shooting": 25, "passing": 78, "dribbling": 50, "defending": 30,
-            "physical": 80, "stamina": 60, "aerial": 88, "composure": 88, "vision": 70},
-    "CB":  {"pace": 74, "shooting": 45, "passing": 80, "dribbling": 68, "defending": 92,
-            "physical": 88, "stamina": 78, "aerial": 88, "composure": 84, "vision": 74},
-    "FB":  {"pace": 90, "shooting": 60, "passing": 84, "dribbling": 82, "defending": 84,
-            "physical": 78, "stamina": 92, "aerial": 66, "composure": 80, "vision": 80},
-    "DM":  {"pace": 72, "shooting": 62, "passing": 90, "dribbling": 85, "defending": 84,
-            "physical": 80, "stamina": 88, "aerial": 70, "composure": 90, "vision": 88},
-    "CM":  {"pace": 78, "shooting": 76, "passing": 93, "dribbling": 92, "defending": 70,
-            "physical": 68, "stamina": 86, "aerial": 58, "composure": 92, "vision": 93},
-    "AM":  {"pace": 82, "shooting": 84, "passing": 88, "dribbling": 92, "defending": 52,
-            "physical": 66, "stamina": 80, "aerial": 58, "composure": 88, "vision": 91},
-    "W":   {"pace": 94, "shooting": 84, "passing": 82, "dribbling": 94, "defending": 44,
-            "physical": 66, "stamina": 84, "aerial": 54, "composure": 84, "vision": 82},
-    "ST":  {"pace": 86, "shooting": 94, "passing": 74, "dribbling": 84, "defending": 40,
-            "physical": 86, "stamina": 78, "aerial": 88, "composure": 92, "vision": 76},
+    "GK":  {"pace": 55, "shooting": 25, "passing": 78, "dribbling": 50,
+            "defending": 30, "physical": 80},
+    "CB":  {"pace": 74, "shooting": 45, "passing": 80, "dribbling": 68,
+            "defending": 92, "physical": 88},
+    "FB":  {"pace": 90, "shooting": 60, "passing": 84, "dribbling": 82,
+            "defending": 84, "physical": 78},
+    "DM":  {"pace": 72, "shooting": 62, "passing": 90, "dribbling": 85,
+            "defending": 84, "physical": 80},
+    "CM":  {"pace": 78, "shooting": 76, "passing": 93, "dribbling": 92,
+            "defending": 70, "physical": 68},
+    "AM":  {"pace": 82, "shooting": 84, "passing": 88, "dribbling": 92,
+            "defending": 52, "physical": 66},
+    "W":   {"pace": 94, "shooting": 84, "passing": 82, "dribbling": 94,
+            "defending": 44, "physical": 66},
+    "ST":  {"pace": 86, "shooting": 94, "passing": 74, "dribbling": 84,
+            "defending": 40, "physical": 86},
+}
+
+#: Where a role's detail differs meaningfully from its headline group. Offsets
+#: are added to the parent value — a centre-back's heading is well above their
+#: general shooting, a winger's crossing above their general passing.
+SIGNATURE_OFFSETS: dict[str, dict[str, int]] = {
+    "GK":  {"long_passing": 6, "reactions": 14, "composure": 12, "jumping": 10,
+            "strength": 6, "agility": 8},
+    "CB":  {"heading_accuracy": 34, "jumping": 10, "strength": 8, "composure": 4,
+            "short_passing": 6, "long_passing": 2, "sliding_tackle": -3,
+            "finishing": -12, "curve": -14, "agility": -12},
+    "FB":  {"crossing": 8, "stamina": 12, "sprint_speed": 4, "agility": 6,
+            "heading_accuracy": -10, "finishing": -14, "strength": -6},
+    "DM":  {"interceptions": 8, "defensive_awareness": 6, "strength": 8,
+            "short_passing": 6, "stamina": 8, "finishing": -14, "agility": -8,
+            "heading_accuracy": 2},
+    "CM":  {"vision": 6, "short_passing": 5, "ball_control": 4, "stamina": 12,
+            "long_passing": 3, "heading_accuracy": -18, "strength": -6},
+    "AM":  {"vision": 8, "ball_control": 6, "agility": 8, "curve": 6,
+            "finishing": 2, "heading_accuracy": -22, "strength": -8,
+            "standing_tackle": -8},
+    "W":   {"acceleration": 5, "crossing": 8, "agility": 6, "ball_control": 4,
+            "heading_accuracy": -24, "strength": -8, "long_passing": -10,
+            "standing_tackle": -6},
+    "ST":  {"finishing": 5, "heading_accuracy": 2, "composure": 6, "strength": 6,
+            "shot_power": 4, "crossing": -18, "long_passing": -14,
+            "standing_tackle": -14},
 }
 
 
-def _attributes(position: Position, overall: float) -> dict:
-    from app.services.ml.features import POSITION_BUCKET
+def _clamp(v: float) -> int:
+    return int(max(20, min(99, round(v))))
 
-    base = ATTRIBUTE_PROFILES[POSITION_BUCKET[position]]
-    # Scale the archetype towards the player's actual level, with noise.
+
+def _attributes(position: Position, overall: float) -> dict:
+    """Build a full attribute profile: six headline faces, every detail, the six
+    goalkeeping attributes, and the two work rates."""
+    from app.services.ml.features import DETAIL_GROUPS, POSITION_BUCKET
+
+    bucket = POSITION_BUCKET[position]
+    base = ATTRIBUTE_PROFILES[bucket]
+    signature = SIGNATURE_OFFSETS.get(bucket, {})
     scale = overall / 88.0
-    return {
-        k: int(max(20, min(99, round(v * scale + RNG.uniform(-4, 4)))))
-        for k, v in base.items()
-    } | {
-        "work_rate_off": RNG.randint(55, 92),
-        "work_rate_def": RNG.randint(45, 90),
-    }
+
+    attrs = {k: _clamp(v * scale + RNG.uniform(-3, 3)) for k, v in base.items()}
+
+    for parent, keys in DETAIL_GROUPS.items():
+        for key in keys:
+            attrs[key] = _clamp(
+                attrs[parent] + signature.get(key, 0) + RNG.uniform(-4, 4)
+            )
+
+    if bucket == "GK":
+        gk_base = overall
+        attrs.update({
+            "gk_diving": _clamp(gk_base + RNG.uniform(-3, 3)),
+            "gk_handling": _clamp(gk_base + RNG.uniform(-4, 3)),
+            "gk_kicking": _clamp(gk_base - 6 + RNG.uniform(-6, 6)),
+            "gk_reflexes": _clamp(gk_base + 1 + RNG.uniform(-3, 3)),
+            "gk_positioning": _clamp(gk_base + RNG.uniform(-3, 3)),
+            "gk_speed": _clamp(gk_base - 22 + RNG.uniform(-6, 6)),
+        })
+    else:
+        # Outfielders carry token goalkeeping values, as scouting databases do.
+        attrs.update({k: RNG.randint(20, 30) for k in
+                      ("gk_diving", "gk_handling", "gk_kicking", "gk_reflexes",
+                       "gk_positioning", "gk_speed")})
+
+    attrs["work_rate_off"] = RNG.randint(55, 92)
+    attrs["work_rate_def"] = RNG.randint(45, 90)
+    return attrs
 
 
 MARKET_NAMES = [

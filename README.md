@@ -72,6 +72,38 @@ The short version:
 | 4 · Video | MP4/MOV, ideally a fixed wide camera | tracking for clubs with no provider contract |
 | 5 · Context | budgets, wage headroom, market pool | affordable signing plans, calibrated academy pathways |
 
+### Getting data in
+
+Three routes, all in the **Import data** tab:
+
+* **CSV** — six datasets (squad, market pool, academy players, academy
+  assessments, match events, tracking). Headers are matched case-insensitively
+  through a table of aliases (`fullname`, `pos`, `dob`, `ovr`), the delimiter is
+  sniffed, and every file is previewed before it is written: column mapping,
+  per-row errors with the offending value, and the first rows as they would be
+  stored. A file with any bad row is refused unless you explicitly opt into a
+  partial import. Templates download from the same panel.
+* **By hand** — a full player editor (identity, contract, load, all 41
+  attributes), club budgets, and team creation.
+* **Video** — upload footage; see [docs/CV.md](docs/CV.md).
+
+### Player attributes
+
+41 keys on a 0-99 scale, in three layers:
+
+* **Six headline faces** — pace, shooting, passing, dribbling, defending,
+  physical. This is the minimum, and everything works with only these.
+* **27 detail attributes** grouped under them — finishing, short passing,
+  standing tackle, acceleration, and so on. A missing detail falls back to *its
+  headline group*, not to the player's overall rating, so a partial profile
+  still produces useful positional fit.
+* **Six goalkeeping attributes** — diving, handling, kicking, reflexes,
+  positioning, speed. Goalkeeping is a different sport; judging a keeper on
+  outfield faces made every goalkeeping decision guesswork.
+
+Plus two work rates. `GET /api/v1/meta/reference` publishes the full vocabulary
+and the per-position weights that turn it into positional fit.
+
 ---
 
 ## Architecture

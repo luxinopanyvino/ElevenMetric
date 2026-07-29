@@ -11,23 +11,80 @@ from dataclasses import dataclass
 
 from app.models.catalog import POSITION_ANCHOR, POSITION_LINE, Position
 
-#: Attribute keys the engines read. Missing keys fall back to `overall_rating`.
-ATTRIBUTE_KEYS = (
-    "pace", "shooting", "passing", "dribbling", "defending", "physical",
-    "stamina", "aerial", "work_rate_off", "work_rate_def", "composure", "vision",
+# --- Attribute vocabulary --------------------------------------------------
+#
+# Three layers, mirroring how scouting databases and football games are
+# organised. A club can supply only the headline six and everything still
+# works; supplying the detail improves positional fit, which is what drives
+# selection, substitutions and transfer scoring.
+
+#: The six summary faces. These are the minimum a club needs to provide.
+HEADLINE_KEYS = ("pace", "shooting", "passing", "dribbling", "defending", "physical")
+
+#: Detail attributes, grouped under the headline they roll up to. A missing
+#: detail falls back to its group's headline value rather than to the player's
+#: overall rating — a striker's `finishing` is far better approximated by their
+#: `shooting` than by their average level.
+DETAIL_GROUPS: dict[str, tuple[str, ...]] = {
+    "pace": ("acceleration", "sprint_speed"),
+    "shooting": ("finishing", "shot_power", "long_shots", "volleys", "penalties",
+                 "heading_accuracy"),
+    "passing": ("vision", "crossing", "free_kick_accuracy", "short_passing",
+                "long_passing", "curve"),
+    "dribbling": ("agility", "balance", "reactions", "ball_control", "composure"),
+    "defending": ("interceptions", "defensive_awareness", "standing_tackle",
+                  "sliding_tackle"),
+    "physical": ("jumping", "stamina", "strength", "aggression"),
+}
+
+#: Goalkeeping is a different sport and needs its own attributes. Judging a
+#: keeper on outfield faces — the previous approach here — made every
+#: goalkeeping decision the weakest output in the system.
+GK_KEYS = ("gk_diving", "gk_handling", "gk_kicking", "gk_reflexes",
+           "gk_positioning", "gk_speed")
+
+#: Work rates, off and on the ball.
+WORK_RATE_KEYS = ("work_rate_off", "work_rate_def")
+
+#: Everything an ingest may supply. All values are 0-99.
+ATTRIBUTE_KEYS: tuple[str, ...] = (
+    HEADLINE_KEYS
+    + tuple(k for group in DETAIL_GROUPS.values() for k in group)
+    + GK_KEYS
+    + WORK_RATE_KEYS
 )
+
+#: detail key → the headline it rolls up to.
+DETAIL_PARENT: dict[str, str] = {
+    key: parent for parent, keys in DETAIL_GROUPS.items() for key in keys
+}
 
 #: Per-position attribute weights, summing to 1. These encode what the position
 #: actually demands and are the basis of `position_fit`.
 POSITION_WEIGHTS: dict[str, dict[str, float]] = {
-    "GK": {"aerial": 0.25, "composure": 0.25, "physical": 0.20, "passing": 0.20, "pace": 0.10},
-    "CB": {"defending": 0.34, "aerial": 0.20, "physical": 0.18, "passing": 0.14, "pace": 0.14},
-    "FB": {"pace": 0.24, "defending": 0.22, "stamina": 0.20, "passing": 0.18, "dribbling": 0.16},
-    "DM": {"defending": 0.28, "passing": 0.24, "physical": 0.18, "vision": 0.16, "stamina": 0.14},
-    "CM": {"passing": 0.26, "vision": 0.20, "stamina": 0.18, "dribbling": 0.18, "defending": 0.18},
-    "AM": {"vision": 0.26, "passing": 0.22, "dribbling": 0.22, "shooting": 0.20, "composure": 0.10},
-    "W":  {"pace": 0.28, "dribbling": 0.26, "shooting": 0.18, "passing": 0.16, "stamina": 0.12},
-    "ST": {"shooting": 0.34, "composure": 0.20, "pace": 0.18, "physical": 0.16, "aerial": 0.12},
+    "GK": {"gk_reflexes": 0.22, "gk_diving": 0.20, "gk_positioning": 0.20,
+           "gk_handling": 0.18, "gk_kicking": 0.12, "composure": 0.08},
+    "CB": {"defensive_awareness": 0.22, "standing_tackle": 0.18,
+           "heading_accuracy": 0.14, "strength": 0.14, "interceptions": 0.12,
+           "sprint_speed": 0.10, "short_passing": 0.10},
+    "FB": {"sprint_speed": 0.18, "stamina": 0.16, "standing_tackle": 0.14,
+           "crossing": 0.14, "defensive_awareness": 0.12, "acceleration": 0.12,
+           "short_passing": 0.08, "agility": 0.06},
+    "DM": {"interceptions": 0.20, "defensive_awareness": 0.18, "short_passing": 0.16,
+           "standing_tackle": 0.14, "strength": 0.12, "long_passing": 0.10,
+           "stamina": 0.10},
+    "CM": {"short_passing": 0.20, "vision": 0.16, "ball_control": 0.14,
+           "long_passing": 0.12, "stamina": 0.12, "defensive_awareness": 0.10,
+           "dribbling": 0.10, "composure": 0.06},
+    "AM": {"vision": 0.20, "short_passing": 0.16, "dribbling": 0.16,
+           "ball_control": 0.14, "finishing": 0.12, "agility": 0.12,
+           "composure": 0.10},
+    "W":  {"dribbling": 0.18, "acceleration": 0.18, "sprint_speed": 0.16,
+           "ball_control": 0.14, "crossing": 0.12, "agility": 0.12,
+           "finishing": 0.10},
+    "ST": {"finishing": 0.24, "shot_power": 0.16, "composure": 0.14,
+           "heading_accuracy": 0.12, "sprint_speed": 0.12, "strength": 0.12,
+           "ball_control": 0.10},
 }
 
 #: Position → weight bucket.
@@ -44,11 +101,42 @@ POSITION_BUCKET: dict[Position, str] = {
 
 
 def attribute(player, key: str, default: float | None = None) -> float:
+    """Read an attribute, falling back sensibly when it was never supplied.
+
+    The chain is: the key itself → its headline group (so ``finishing`` falls
+    back to ``shooting``, not to the player's average) → the caller's default →
+    the overall rating. This is what lets a club supply only the six headline
+    faces and still get useful positional fit.
+    """
     attrs = getattr(player, "attributes", None) or {}
+
     val = attrs.get(key)
-    if val is None:
-        return float(default if default is not None else getattr(player, "overall_rating", 70.0))
-    return float(val)
+    if val is not None:
+        return float(val)
+
+    parent = DETAIL_PARENT.get(key)
+    if parent is not None and attrs.get(parent) is not None:
+        return float(attrs[parent])
+
+    if default is not None:
+        return float(default)
+    return float(getattr(player, "overall_rating", 70.0))
+
+
+def headline_from_detail(attrs: dict) -> dict:
+    """Derive any missing headline face from the detail beneath it.
+
+    Clubs that export a full scouting profile rarely also export the summary
+    faces; this fills them so the two representations stay consistent.
+    """
+    out = dict(attrs)
+    for parent, keys in DETAIL_GROUPS.items():
+        if out.get(parent) is not None:
+            continue
+        present = [float(out[k]) for k in keys if out.get(k) is not None]
+        if present:
+            out[parent] = round(sum(present) / len(present), 1)
+    return out
 
 
 #: How much of a player's rating a bad positional fit costs. A fit of 0.5 with

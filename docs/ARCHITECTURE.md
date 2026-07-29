@@ -100,6 +100,22 @@ Notable choices:
   kits that differ only above the waist; including grass makes everyone green.
   Lab distance means a threshold set on one fixture transfers to another.
 
+## Ingestion
+
+`services/ingest/csv_ingest.py` is deliberately split from the API: parsing and
+validation are pure functions over bytes, which is what makes a preview
+endpoint possible at all — the same code path runs whether or not anything will
+be written.
+
+The parser is tolerant on shape (sniffed delimiter, alias-matched headers,
+several date formats) and strict on meaning (an unknown column is reported, a
+bad value fails its own row with the value quoted, nothing is coerced silently).
+Commit refuses a file with any invalid row unless the caller opts into a partial
+import: a half-imported squad is worse than none.
+
+Re-importing a squad updates by name rather than duplicating, so a club can
+treat the CSV as the source of truth and re-upload it.
+
 ## Frontend
 
 Vanilla ES modules — no build step, no runtime dependencies, served as static

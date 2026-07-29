@@ -8,13 +8,15 @@ import * as analysisView from './views/analysis.js';
 import * as transfersView from './views/transfers.js';
 import * as academyView from './views/academy.js';
 import * as dataView from './views/data.js';
+import * as ingestView from './views/ingest.js';
 
 const TABS = [
   { id: 'squad', label: 'Squad', view: squadView },
   { id: 'analysis', label: 'Analysis', view: analysisView },
   { id: 'transfers', label: 'Transfer market', view: transfersView },
   { id: 'academy', label: 'Academy', view: academyView },
-  { id: 'data', label: 'Data', view: dataView },
+  { id: 'ingest', label: 'Import data', view: ingestView },
+  { id: 'data', label: 'Data contract', view: dataView },
 ];
 
 const state = {
