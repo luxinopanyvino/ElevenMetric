@@ -200,20 +200,79 @@ promotion timeline.
 
 ## Match simulator
 
-Not a product model — a deterministic fixture generator, used for the demo, for
-tests, and as the labelled fallback when the CV extras are missing.
+Two things share this name and they are not the same:
 
-It is calibrated against real match distributions, and getting there exposed two
-bugs worth recording:
+- **`services/cv/synthetic.py`** — a deterministic fixture *generator*, used for
+  the demo, for tests, and as the labelled fallback when the CV extras are
+  missing. It produces plausible data; it does not model players.
+- **`services/simulation/engine.py`** — the **match engine** behind the Match sim
+  tab, described below. Every outcome comes from the players actually on the
+  pitch.
 
-- **The block must be compressed around the ball.** The position anchors span
-  ~87 m; used as absolute positions the "team" strings out over the whole pitch
-  and every compactness metric reads as broken.
-- **The block centre must be clamped, per direction.** Block follows ball,
-  ball follows carrier, carrier is pushed forward by the block — an unclamped
-  loop walks the whole team onto the goal line and produces ~90 shots a side.
-  A single shared clamp is worse than none: it over-restricts one team and lets
-  the other shoot from the six-yard box.
+### The match engine
 
-Current output per 90 minutes: ~11-15 shots a side, ~1-3 xG, mean pass 17 m,
-75-80% completion, 33 m block depth.
+`simulate(home, away, ...)` plays a fixture tick by tick at 5 Hz and returns
+events, tracking frames, a per-player report, a five-minute condition timeline,
+and a compact positional stream for playback. It is deterministic in its seed —
+the UI offers that as a promise, so it is a tested property.
+
+**Shape.** Each side holds eleven slots at formation anchors, compressed around
+the block centre (`BLOCK_COMPRESSION`), stretched when in possession
+(`IN_POSSESSION_STRETCH`), shifted toward the ball, and — when the ball reaches
+the final third — pulled toward the box in proportion to each slot's
+`SHOT_APPETITE` (`BOX_ARRIVAL_M`). A substitution replaces the occupant of a
+slot; it never changes how the shape behaves.
+
+**On the ball.** Every ~5 s the carrier either shoots or passes.
+
+- *Pass selection* is a bounded forward preference (`tanh`, not an exponential), times
+  a distance decay, times a marking penalty from the nearest opponent to each
+  receiver.
+- *Shooting* is gated on role and on the distance the player would strike from
+  *after* carrying, not on where the shape parks him.
+- *Completion* comes from the passer's short/long passing, his condition, and the
+  pressure from the nearest opponent weighted by that opponent's defensive
+  awareness.
+- *Conversion* is drawn from the shot's own xG, scaled by the finisher's
+  finishing and condition so that an average finisher lands exactly on the model.
+
+**Fatigue** is the same `fatigue_state` curve the rest of the app uses. It feeds
+closing-down speed, pass and shot quality, and the substitution decision.
+
+### Calibration, and the bugs it exposed
+
+Every one of these produced output that looked authoritative and was wrong.
+
+| Symptom | Cause |
+|---|---|
+| ~90 shots a side, team on the goal line | block centre unclamped: block follows ball, ball follows carrier, carrier is pushed by block |
+| one side 19 shots, the other 7, evenly matched | the outfield clamp is written for a side attacking right and was applied to both as an absolute band, so the away side attacked 7 m closer |
+| the whole side strung over 87 m | anchors used as absolute positions |
+| the forward took *every* shot | a fixed 32 m shooting gate, with a permanently compressed block: he was the only man ever inside it |
+| 1 000 passes and 243 touches for one player | 2.7 s between on-ball actions; a side plays 450-550 passes |
+| 17 km covered by a centre-back | positional jitter integrated into the distance total |
+| a fifth of all touches through the centre-forward | exponential forward-pass bias made a 40 m ball to him 20× likelier than a 10 m one to a midfielder |
+| 0.33 xG per shot, 17 goals a game | the carry interpolated every attempt onto the centre of the goal, where xG peaks |
+| goals 2.5× the recorded xG | conversion anchored on an unrelated constant instead of the shot's own xG |
+| everyone covering 7 km | the block never shifted laterally |
+
+Output per fixture now: **24-30 shots**, **2-4 goals**, **2.5-3.5 xG**,
+**~0.10 xG per shot**, median shot from **17 m**, **480-560 passes a side** at
+**77-83%**, outfielders **9-10 km**, possession **within 5 points of even**
+between equal sides.
+
+### Known limitation: shot distribution
+
+Forwards take about **three quarters** of their side's shots. Real ones take a
+quarter to a third.
+
+This is structural, not a tuning miss. Eleven slots at fixed anchors have no
+third-man runs, no overlaps, no late arrivals from midfield — so whoever is
+highest is the player who ends up in shooting positions, and no amount of
+reweighting `SHOT_APPETITE` changes that without making the numbers cosmetic.
+Fixing it properly means giving players off-ball intent, which is a larger model
+than this one. `test_the_forward_does_not_take_almost_every_shot` pins the
+current behaviour as a ceiling and says so in its docstring.
+
+Everything downstream of shot *location* — xG, heatmaps, zone occupancy — is
+sound; it is the attribution to a shirt number that is concentrated.
