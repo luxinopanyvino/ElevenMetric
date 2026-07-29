@@ -50,9 +50,10 @@
   --critical: #d03b3b;
   --success-text: #006300;
 
-  /* Pitch */
-  --pitch-fill: #f1f4ee;
-  --pitch-line: rgba(11, 11, 11, 0.22);
+  /* Pitch. The light fill needs real separation from --surface-1; a near-white
+     green reads as an empty card rather than a football pitch. */
+  --pitch-fill: #e3ecdd;
+  --pitch-line: rgba(11, 11, 11, 0.30);
 
   --radius-sm: 4px;
   --radius: 8px;
