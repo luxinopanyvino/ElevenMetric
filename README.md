@@ -65,7 +65,7 @@ and each source reports itself unavailable with the reason and the remedy. See
 ### Tests
 
 ```bash
-cd backend && python -m pytest         # 250 tests
+cd backend && python -m pytest         # 255 tests
 ```
 
 ---
