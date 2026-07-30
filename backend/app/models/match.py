@@ -67,6 +67,10 @@ class Match(UUIDPk, Timestamped, TenantScoped, Base):
 
     notes: Mapped[str] = mapped_column(Text, default="")
 
+    #: Where this fixture came from, when an external source supplied it.
+    #: Empty for matches created by hand. See app/services/external/base.py.
+    provenance: Mapped[dict] = mapped_column(JSON, default=dict)
+
     lineups: Mapped[list["Lineup"]] = relationship(
         back_populates="match", cascade="all, delete-orphan"
     )

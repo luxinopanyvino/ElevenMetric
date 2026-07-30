@@ -195,7 +195,11 @@ def analyse_match(payload: MatchAnalysisRequest, scope: Scope) -> ReportOut:
     else:
         lineups = scope.all(Lineup, Lineup.match_id == match.id,
                             order_by=Lineup.from_minute.desc())
-        lineup = lineups[0] if lineups else None
+        # A match can carry a shape for both sides — an imported fixture always
+        # does. The report is about *this* club, so pick its own lineup rather
+        # than whichever row sorted first.
+        own = [lu for lu in lineups if lu.team_id == match.team_id]
+        lineup = (own or lineups or [None])[0]
 
     job = AnalysisJob(
         kind=JobKind.match_analysis, status=JobStatus.running,

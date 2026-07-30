@@ -19,7 +19,12 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from app.models.catalog import POSITION_LINE, Position
-from app.services.ml.features import age_curve, effective_level, position_fit
+from app.services.ml.features import (
+    age_curve,
+    effective_level,
+    is_rankable,
+    position_fit,
+)
 
 #: Minimum bodies per position group for a season. Below this is a depth need.
 DEPTH_TARGETS: dict[str, int] = {"GK": 3, "DEF": 8, "MID": 6, "ATT": 5}
@@ -123,6 +128,9 @@ def detect_needs(
     formations actually use.
     """
     vulnerabilities = vulnerabilities or []
+    # Squad strength is measured against the squad's own ratings; a player with
+    # none cannot raise or lower the bar, so they are not counted as depth.
+    players = [p for p in players if is_rankable(p)]
     by_position: dict[Position, list] = {}
     by_line: dict[str, list] = {"GK": [], "DEF": [], "MID": [], "ATT": []}
 

@@ -1,0 +1,11 @@
+{
+ "match_id": 8650,
+ "date": "2018-07-06",
+ "competition": "FIFA World Cup",
+ "season": "2018",
+ "home": "Brazil",
+ "away": "Belgium",
+ "home_score": 1,
+ "away_score": 2,
+ "note": "Trimmed to a slice of the first half; captured from StatsBomb open data for offline tests. Data provided by StatsBomb (open data)."
+}

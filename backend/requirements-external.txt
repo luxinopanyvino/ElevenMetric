@@ -1,0 +1,18 @@
+# ElevenMetric — external data sources (optional)
+#
+#   pip install -r requirements-external.txt
+#
+# Without these the API still runs and every existing route behaves identically.
+# `GET /api/v1/external/sources` reports each source's availability and what is
+# needed to enable it. See docs/EXTERNAL_SOURCES.md.
+
+# StatsBomb open data — real competitions, fixtures, lineups and events.
+# Free under StatsBomb's open-data user agreement, which requires attribution;
+# the product carries that attribution on every StatsBomb-derived row.
+statsbombpy>=1.22
+
+# --- Note on SoFIFA --------------------------------------------------------
+# The SoFIFA reader needs nothing here: it is implemented over the standard
+# library in app/services/external/sofifa.py. It is disabled unless
+# ELEVENMETRIC_EXTERNAL_FETCH_ENABLED=true, and works offline from a saved page
+# either way.

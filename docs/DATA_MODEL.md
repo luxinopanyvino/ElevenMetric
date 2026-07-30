@@ -196,3 +196,33 @@ The inputs that make recommendations *actionable* rather than merely correct.
 | Where were our players when off the ball? | Tier 3 |
 | Who should we sign, within budget? | Tier 1 + Tier 5 (Tier 2 sharpens it) |
 | When is this youth player ready? | Tier 1 + academy assessments |
+
+---
+
+## Where the data can come from
+
+Four routes, all previewed before they write anything. The first three are the
+club's own data; the fourth is public.
+
+| Route | Supplies | Notes |
+|---|---|---|
+| **CSV** | tiers 1, 2, 3, 5 | Six datasets, alias-matched headers, per-row validation |
+| **By hand** | tiers 1, 5 | The full player editor and club budgets |
+| **Video** | tier 4 → 3 | See [CV.md](CV.md) |
+| **External sources** | tiers 1, 2 | See [EXTERNAL_SOURCES.md](EXTERNAL_SOURCES.md) |
+
+The external route needs its own sentence about rule 2 above, because it is the
+only route where the data is *someone else's*:
+
+* **SoFIFA** lands in **Tier 1**. It supplies a full attribute profile for a
+  real club's squad — and *no* minutes, load or season statistics. Those stay
+  absent. Its ratings are the EA Sports FC video game's judgement, not
+  measurements, and are labelled as such wherever they drive a recommendation.
+* **StatsBomb open data** lands in **Tier 2**. It supplies real lineups and a
+  real event feed — and **no player ratings at all**. A player imported from it
+  has `overall_rating = null`, which is why that column is nullable: the
+  alternative was defaulting eleven real people to 70. Ranking engines exclude
+  ungraded players and report that they did.
+
+Every row an external source creates carries a `provenance` record naming the
+source, the edition or competition, the source's own id, and when it was read.

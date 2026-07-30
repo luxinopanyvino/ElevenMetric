@@ -2,9 +2,11 @@
 
 import { api } from '../api.js';
 import { badge, el, empty, fmt, loading, mount, note, table, tile } from '../ui.js';
+import { panel as externalPanel } from './external.js';
 
 const PANELS = [
   { id: 'csv', label: 'CSV import' },
+  { id: 'external', label: 'Real teams' },
   { id: 'manual', label: 'Manual entry' },
   { id: 'video', label: 'Video' },
 ];
@@ -69,8 +71,9 @@ export async function render(root, state) {
       ui.error ? note(String(ui.error), 'critical') : null,
 
       ui.panel === 'csv' ? csvPanel()
-        : ui.panel === 'manual' ? manualPanel()
-          : videoPanel(),
+        : ui.panel === 'external' ? externalPanel(ui, draw, state)
+          : ui.panel === 'manual' ? manualPanel()
+            : videoPanel(),
     );
   }
 

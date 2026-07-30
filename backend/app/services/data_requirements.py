@@ -60,7 +60,9 @@ TIERS: list[Tier] = [
             "Tactical profiling and vulnerability detection",
             "Evidence-backed in-match substitutions",
         ],
-        typical_sources=["Manual entry in the UI", "CSV import", "Club squad database"],
+        typical_sources=["Manual entry in the UI", "CSV import", "Club squad database",
+                         "SoFIFA import (EA FC 26 ratings — a game's judgement, "
+                         "not measurements; see docs/EXTERNAL_SOURCES.md)"],
         ingest_endpoint="POST /api/v1/players",
         fields=[
             Field_("name", "string", True, "Player's full name", "Frenkie de Jong"),
@@ -110,7 +112,10 @@ TIERS: list[Tier] = [
             "Off-ball runs, defensive line height, real compactness",
             "Packing / players bypassed",
         ],
-        typical_sources=["Opta / StatsPerform", "StatsBomb", "Wyscout", "Manual tagging (Hudl, LongoMatch)"],
+        typical_sources=["Opta / StatsPerform", "StatsBomb", "Wyscout",
+                         "Manual tagging (Hudl, LongoMatch)",
+                         "StatsBomb open data import (free, real fixtures; "
+                         "publishes no player ratings)"],
         ingest_endpoint="POST /api/v1/matches/{match_id}/events",
         fields=[
             Field_("period", "int", True, "1 or 2 (3/4 for extra time)", "1"),

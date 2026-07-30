@@ -14,10 +14,13 @@ from dataclasses import dataclass, field
 
 from app.models.catalog import Position
 from app.services.ml.features import (
+    UNRANKED_FALLBACK as UNRANKED,
     attribute,
     fatigue_state,
+    is_rankable,
     player_feature_vector,
     position_fit,
+    rating_or,
 )
 from app.services.ml.registry import get_model
 
@@ -140,6 +143,11 @@ def recommend_substitutions(
     events = events or []
     model = get_model("impact")
 
+    # Swapping an ungraded player in or out cannot be justified by a level
+    # difference nobody has measured, so both sides of the swap must be graded.
+    starters = [row for row in starters if is_rankable(row[0])]
+    bench = [p for p in bench if is_rankable(p)]
+
     minutes_remaining = max(0, match_length - minute)
     if minutes_remaining <= 2 or subs_used >= MAX_SUBSTITUTIONS or windows_used >= MAX_WINDOWS:
         return []
@@ -154,7 +162,7 @@ def recommend_substitutions(
         out_fs = fatigue_state(
             minutes_played=mins,
             age=getattr(player_out, "age", None),
-            stamina=attribute(player_out, "stamina", player_out.overall_rating),
+            stamina=attribute(player_out, "stamina", rating_or(player_out, UNRANKED)),
             minutes_last_7d=getattr(player_out, "minutes_last_7d", 0) or 0,
             baseline_fatigue=getattr(player_out, "fatigue", 0.0) or 0.0,
         )
@@ -306,7 +314,7 @@ def workload_alerts(starters: list, *, minute: int = 90) -> list[dict]:
         fs = fatigue_state(
             minutes_played=mins,
             age=getattr(player, "age", None),
-            stamina=attribute(player, "stamina", player.overall_rating),
+            stamina=attribute(player, "stamina", rating_or(player, UNRANKED)),
             minutes_last_7d=getattr(player, "minutes_last_7d", 0) or 0,
             baseline_fatigue=getattr(player, "fatigue", 0.0) or 0.0,
         )
