@@ -49,7 +49,7 @@ UI says so in as many words. See [docs/CV.md](docs/CV.md).
 ### Tests
 
 ```bash
-cd backend && python -m pytest         # 137 tests
+cd backend && python -m pytest         # 205 tests
 ```
 
 ---
@@ -72,6 +72,38 @@ The short version:
 | 4 · Video | MP4/MOV, ideally a fixed wide camera | tracking for clubs with no provider contract |
 | 5 · Context | budgets, wage headroom, market pool | affordable signing plans, calibrated academy pathways |
 
+### Getting data in
+
+Three routes, all in the **Import data** tab:
+
+* **CSV** — six datasets (squad, market pool, academy players, academy
+  assessments, match events, tracking). Headers are matched case-insensitively
+  through a table of aliases (`fullname`, `pos`, `dob`, `ovr`), the delimiter is
+  sniffed, and every file is previewed before it is written: column mapping,
+  per-row errors with the offending value, and the first rows as they would be
+  stored. A file with any bad row is refused unless you explicitly opt into a
+  partial import. Templates download from the same panel.
+* **By hand** — a full player editor (identity, contract, load, all 41
+  attributes), club budgets, and team creation.
+* **Video** — upload footage; see [docs/CV.md](docs/CV.md).
+
+### Player attributes
+
+41 keys on a 0-99 scale, in three layers:
+
+* **Six headline faces** — pace, shooting, passing, dribbling, defending,
+  physical. This is the minimum, and everything works with only these.
+* **27 detail attributes** grouped under them — finishing, short passing,
+  standing tackle, acceleration, and so on. A missing detail falls back to *its
+  headline group*, not to the player's overall rating, so a partial profile
+  still produces useful positional fit.
+* **Six goalkeeping attributes** — diving, handling, kicking, reflexes,
+  positioning, speed. Goalkeeping is a different sport; judging a keeper on
+  outfield faces made every goalkeeping decision guesswork.
+
+Plus two work rates. `GET /api/v1/meta/reference` publishes the full vocabulary
+and the per-position weights that turn it into positional fit.
+
 ---
 
 ## Architecture
@@ -80,12 +112,15 @@ The short version:
 backend/app/
 ├── core/            config, JWT auth, tenant scoping
 ├── db/              SQLAlchemy models, session, demo seed
-├── api/v1/          auth · squad · matches · analysis · transfers · academy · meta
+├── api/v1/          auth · squad · matches · analysis · transfers · academy
+│                    · ingest · simulation · meta
 ├── schemas/         Pydantic request/response models
 └── services/
     ├── analytics/   pitch geometry · xG/xT · possession · formation · tactics · heatmaps
     ├── ml/          features · substitutions · best XI · transfers · academy · registry
     ├── cv/          detector · tracker · homography · kit classifier · simulator
+    ├── simulation/  the match engine behind the Match sim tab
+    ├── ingest/      CSV parsing and validation, as pure functions over bytes
     ├── orchestrator.py     routes inputs → models → a report with honest confidence
     └── data_requirements.py  the input contract, as data
 frontend/            vanilla HTML/CSS/JS — no build step, no runtime dependencies
@@ -143,6 +178,28 @@ kits → derive events. The homography is re-estimated per frame because a
 broadcast camera pans constantly and a stale matrix silently corrupts every
 distance in the report.
 
+**Match simulation.** Pick your side and an opponent — a second squad on file, or
+a stand-in generated at a level you choose — and watch the fixture play out:
+twenty-two players moving, a live clock and score, condition draining player by
+player, and substitutions arriving at the usual windows when someone is spent.
+
+Three playback speeds: **instant**, **30 seconds**, or **four minutes** for the
+full ninety. All three return the same data; speed is a client-side decision, so
+switching costs nothing.
+
+Every outcome comes from the players actually on the pitch. A pass completes
+according to the passer's short or long passing, his current condition, and the
+pressure from the nearest opponent weighted by that opponent's defensive
+awareness. A shot is gated on the shooter's role and the distance he would strike
+from, and converts according to its own xG scaled by his finishing — so the
+scoreline and the xG the app reports stay on the same scale.
+
+A finished fixture can be stored as an ordinary match and fed straight into the
+analysis pipeline, labelled as a simulation throughout. Same seed, same match.
+
+The engine's calibration — and the one place it is knowingly unrealistic, shot
+distribution across a side — is documented in [docs/MODELS.md](docs/MODELS.md).
+
 ---
 
 ## Honesty by construction
@@ -157,6 +214,11 @@ The system is designed so it cannot quietly overstate what it knows:
   `fit_from_dataset()` replaces them with club data.
 - Simulated output is labelled `engine="simulated"` from the job record through
   to the report summary and the UI banner.
+- A simulated fixture is stored as a simulation — competition, provider and match
+  notes all say so — and a generated opponent is reported as generated, in the
+  API response and on screen, rather than passed off as a squad on file.
+- Where a model is knowingly unrealistic, the docs say so and the test asserts a
+  ceiling rather than pretending the behaviour is correct.
 - Every recommendation carries the numbers behind it under `evidence`.
 
 ## Licence and data

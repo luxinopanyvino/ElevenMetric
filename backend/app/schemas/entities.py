@@ -62,6 +62,32 @@ class PlayerBase(BaseModel):
             raise ValueError(f"Unknown positions: {bad}. Valid: {sorted(valid)}")
         return v
 
+    @field_validator("attributes")
+    @classmethod
+    def _valid_attributes(cls, v: dict) -> dict:
+        """Reject unknown keys and out-of-range values.
+
+        A typo in an attribute name would otherwise sit in the JSON column
+        silently and simply never be read, which is far harder to notice than a
+        422 at ingest time.
+        """
+        from app.services.ml.features import ATTRIBUTE_KEYS, headline_from_detail
+
+        known = set(ATTRIBUTE_KEYS)
+        if unknown := sorted(set(v) - known):
+            raise ValueError(
+                f"Unknown attributes: {unknown}. Valid keys: {sorted(known)}"
+            )
+        for key, value in v.items():
+            try:
+                num = float(value)
+            except (TypeError, ValueError):
+                raise ValueError(f"Attribute '{key}' must be a number, got {value!r}")
+            if not 0 <= num <= 99:
+                raise ValueError(f"Attribute '{key}' must be 0-99, got {num}")
+        # Fill any headline face the caller left out but has detail for.
+        return headline_from_detail(v)
+
 
 class PlayerCreate(PlayerBase):
     team_id: str | None = None

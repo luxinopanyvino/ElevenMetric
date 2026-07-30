@@ -24,7 +24,14 @@ from app.services.analytics.pitch import (
     zone_labels,
 )
 from app.services.cv import pipeline as cv_pipeline
-from app.services.ml.features import POSITION_WEIGHTS
+from app.services.ml.features import (
+    ATTRIBUTE_KEYS,
+    DETAIL_GROUPS,
+    GK_KEYS,
+    HEADLINE_KEYS,
+    POSITION_WEIGHTS,
+    WORK_RATE_KEYS,
+)
 from app.services.ml.lineup_optimizer import FORMATION_SLOTS
 from app.services.ml.registry import model_catalogue
 
@@ -85,6 +92,17 @@ def reference() -> dict:
             }
             for p in Position
         ],
+        "attributes": {
+            "headline": list(HEADLINE_KEYS),
+            "detail": {parent: list(keys) for parent, keys in DETAIL_GROUPS.items()},
+            "goalkeeping": list(GK_KEYS),
+            "work_rates": list(WORK_RATE_KEYS),
+            "all": list(ATTRIBUTE_KEYS),
+            "scale": "0-99",
+            "note": "Only the six headline faces are required. A missing detail "
+                    "falls back to its headline group, so a partial profile still "
+                    "produces useful positional fit.",
+        },
         "position_weights": POSITION_WEIGHTS,
         "formations": {k: [p.value for p in v] for k, v in FORMATION_SLOTS.items()},
         "feet": [f.value for f in Foot],

@@ -100,6 +100,48 @@ Notable choices:
   kits that differ only above the waist; including grass makes everyone green.
   Lab distance means a threshold set on one fixture transfers to another.
 
+## Match simulation
+
+`services/simulation/engine.py` plays a fixture at 5 Hz and returns it in the
+same shapes the rest of the app already consumes — `SimEvent` is duck-type
+compatible with `MatchEvent`, `SimFrame` with `TrackingFrame` — so
+`/simulation/run` can persist a simulated fixture as an ordinary `Match` and the
+analysis pipeline reads it back with no special case. The stored match is labelled
+`competition="Simulation"`, `provider="elevenmetric-sim"`, and its notes say
+plainly that it is not a record of a real match.
+
+Two decisions shape the API:
+
+- **All the work happens in one request.** Playback speed — instant, 30 s, or four
+  minutes — is entirely a client-side decision, so all three modes return the same
+  payload. Streaming would add a socket and a session for no gain.
+- **Positions ship as a flat integer stream.** One array per frame,
+  `[clock_s, x0, y0, …, ball_x, ball_y, possession]` against a fixed roster order,
+  quantised to half-metres. The object-per-player-per-frame form is ~6× larger
+  over the wire for exactly the same numbers; a 90-minute fixture is ~600 KB
+  rather than 1.5 MB.
+
+The roster describes each slot **at kick-off**, and substitutions carry their
+`slot_index`, which is what lets the client relabel a token at the right minute
+and lets you scrub backwards to the original XI. See [MODELS.md](MODELS.md) for
+the engine's calibration and its one known limitation.
+
+## Ingestion
+
+`services/ingest/csv_ingest.py` is deliberately split from the API: parsing and
+validation are pure functions over bytes, which is what makes a preview
+endpoint possible at all — the same code path runs whether or not anything will
+be written.
+
+The parser is tolerant on shape (sniffed delimiter, alias-matched headers,
+several date formats) and strict on meaning (an unknown column is reported, a
+bad value fails its own row with the value quoted, nothing is coerced silently).
+Commit refuses a file with any invalid row unless the caller opts into a partial
+import: a half-imported squad is worse than none.
+
+Re-importing a squad updates by name rather than duplicating, so a club can
+treat the CSV as the source of truth and re-upload it.
+
 ## Frontend
 
 Vanilla ES modules — no build step, no runtime dependencies, served as static
@@ -115,7 +157,7 @@ every chart.
 
 ## Testing
 
-137 tests in three files:
+205 tests in five files:
 
 - `test_analytics.py` — geometry, provider conversion, xG/xT monotonicity,
   possession definitions, formation recovery, heatmap invariants, and the
@@ -127,5 +169,15 @@ every chart.
 - `test_api.py` — auth, **tenant isolation** (404-not-403 on four surfaces),
   ingest conversion and decimation, analysis output shape, role enforcement,
   API-key lifecycle.
+- `test_ingest.py` — the attribute vocabulary, positional weights, header alias
+  matching, per-row validation, and the preview/commit contract.
+- `test_simulation.py` — the match engine: determinism, every realism band in
+  [MODELS.md](MODELS.md), substitution bookkeeping, and playback stream shape.
+
+Most of `test_simulation.py` exists because a plausible-looking simulation is
+worse than none: the tests are the bands, and each one that pins a past bug says
+in its docstring what the bug looked like. A few deliberately assert a *ceiling*
+rather than realism — `test_the_forward_does_not_take_almost_every_shot` is a
+regression guard on a limitation, not a claim that the behaviour is right.
 
 The suite runs against a throwaway SQLite database seeded once per session.

@@ -301,3 +301,40 @@ tr.selected-row { background: var(--surface-3); }
 .tier.missing { border-left: 3px solid var(--warning); }
 .tier h3 { display: flex; align-items: center; gap: .45rem; }
 .tier ul { margin: .4rem 0 0; padding-left: 1.15rem; font-size: .8rem; color: var(--text-secondary); }
+
+/* --- Match simulation ---------------------------------------------------- */
+
+.sim-side { display: inline-flex; align-items: center; gap: .4rem; font-weight: 650; }
+.sim-side .sim-dot {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--kit);
+  border: 1px solid var(--border-strong);
+}
+.sim-score {
+  font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  padding: 0 .4rem;
+}
+.sim-clock {
+  font-variant-numeric: tabular-nums; font-weight: 650;
+  color: var(--text-secondary); font-size: .9rem;
+}
+.sim-poss {
+  height: 6px; border-radius: 3px; background: var(--surface-3);
+  overflow: hidden; margin-bottom: .7rem;
+}
+.sim-poss-fill {
+  height: 100%; background: var(--series-1); width: 50%;
+  transition: width .35s ease;
+}
+@media (prefers-reduced-motion: reduce) { .sim-poss-fill { transition: none; } }
+
+.sim-token text { pointer-events: none; }
+
+.sim-feed { display: flex; flex-direction: column; gap: .4rem; max-height: 240px; overflow-y: auto; }
+.sim-feed-item {
+  display: flex; align-items: center; gap: .5rem; font-size: .8rem;
+  color: var(--text-secondary);
+}
+.sim-feed-minute {
+  font-variant-numeric: tabular-nums; font-weight: 650;
+  color: var(--text-primary); min-width: 30px;
+}

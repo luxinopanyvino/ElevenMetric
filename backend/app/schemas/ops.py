@@ -174,3 +174,46 @@ class AcademyReviewRequest(BaseModel):
 class AcademyReviewResponse(BaseModel):
     projections: list[dict]
     summary: dict
+
+
+# --- Simulation ------------------------------------------------------------
+
+class SimulationRequest(BaseModel):
+    home_team_id: str
+    away_team_id: str | None = Field(
+        default=None,
+        description="Leave empty to face a generated side at `away_strength`.",
+    )
+    away_name: str = "Opposition"
+    away_strength: float = Field(
+        default=78.0, ge=40, le=99,
+        description="Rating the stand-in opposition is built around.",
+    )
+    home_formation: str | None = None
+    away_formation: str | None = None
+    home_press_height: float = Field(default=0.62, ge=0, le=1)
+    away_press_height: float = Field(default=0.50, ge=0, le=1)
+    minutes: int = Field(default=90, ge=5, le=120)
+    seed: int = Field(default=20260728,
+                      description="Same seed, same match — the engine is deterministic.")
+    playback_hz: float = Field(
+        default=0.5, gt=0, le=5,
+        description="Positional samples per match-second shipped for playback. "
+                    "Higher is smoother and heavier.",
+    )
+    auto_subs: bool = Field(
+        default=True,
+        description="Let each side replace spent players at the usual windows.",
+    )
+    persist: bool = Field(
+        default=True,
+        description="Store the fixture as a match so it can be analysed afterwards.",
+    )
+
+
+class SimulationResponse(BaseModel):
+    match_id: str | None
+    opponent_is_synthetic: bool
+    summary: dict
+    playback: dict
+    note: str
