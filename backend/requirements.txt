@@ -14,3 +14,17 @@ scikit-learn>=1.4
 # Computer-vision pipeline (video input). Install with:
 #   pip install -r requirements-cv.txt
 # Without these the video pipeline runs in `simulated` mode (see docs/CV.md).
+
+# --- Developer tooling -----------------------------------------------------
+# Not needed to run the API — only for the project's spec-driven workflow and
+# the codebase knowledge graph. See the "Developer tooling" section of the
+# README. Prefer isolated installs (`uv tool install` / `uvx`) over adding
+# these to a production image.
+#
+# graphify — turns the codebase into a navigable knowledge graph in
+#   graphify-out/ (graph.html, GRAPH_REPORT.md, graph.json). Invoked via
+#   the /graphify skill; also usable as `graphify` on the CLI.
+graphifyy>=0.9.11
+# GitHub Spec Kit — spec-driven development CLI (`specify`), source of the
+#   .specify/ scaffolding and the /speckit-* skills.
+specify-cli @ git+https://github.com/github/spec-kit.git

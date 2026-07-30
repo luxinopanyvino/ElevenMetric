@@ -32,7 +32,12 @@ uvicorn app.main:app --reload
 ```
 
 Open <http://localhost:8000> and sign in with `owner@demo.fc` / `elevenmetric`.
-The API docs are at `/docs`.
+The API docs are at `/docs`. The backend serves the frontend as static files, so
+this one process is the whole dashboard — there is no separate frontend server.
+
+On Windows you can skip the manual steps and run **`script.bat`** from the repo
+root: it creates a virtualenv, installs dependencies, seeds the demo database
+(first run only), starts uvicorn and opens the dashboard.
 
 The seed creates two tenants (`demo-fc` and `rival-united`) so tenant isolation
 is visible — and testable — from the first run.
@@ -220,6 +225,59 @@ The system is designed so it cannot quietly overstate what it knows:
 - Where a model is knowingly unrealistic, the docs say so and the test asserts a
   ceiling rather than pretending the behaviour is correct.
 - Every recommendation carries the numbers behind it under `evidence`.
+
+## Developer tooling
+
+Two tools support how work is planned and understood here. Neither is needed to
+run the API; both are listed under **Developer tooling** in
+`backend/requirements.txt`, and both are best installed in isolation with
+`uv tool install` / `uvx` rather than into a production image.
+
+### Spec-driven development — GitHub Spec Kit
+
+Non-trivial features start from a spec, not from code. [Spec Kit](https://github.com/github/spec-kit)
+is initialised in `.specify/` (templates, scripts, and the project
+**constitution** in `.specify/memory/constitution.md`), and drives the work
+through `/speckit-*` skills in your coding agent:
+
+```
+/speckit-constitution   # establish or amend the project principles
+/speckit-specify        # write the feature specification
+/speckit-plan           # turn the spec into an implementation plan
+/speckit-tasks          # break the plan into actionable tasks
+/speckit-implement      # execute the tasks
+```
+
+The constitution encodes this project's non-negotiables — honesty by
+construction, no imputation across data tiers, structural tenant isolation, and
+tracked provenance — so specs and plans are checked against them rather than
+against taste. Re-initialise or update with:
+
+```bash
+uvx --from git+https://github.com/github/spec-kit.git specify init --here --integration claude
+```
+
+### Codebase knowledge graph — graphify
+
+The whole codebase is available as a navigable knowledge graph, so you can trace
+relationships before touching cross-cutting code. Built with
+[graphify](https://github.com/safishamsi/graphify) over `backend/`, `frontend/`
+and `docs/`, the outputs live in `graphify-out/`:
+
+* `graph.html` — the interactive graph, open in any browser (no server).
+* `GRAPH_REPORT.md` — audit report: god nodes, communities, surprising links.
+* `graph.json` — the raw graph (GraphRAG-ready).
+
+The current graph is **1,220 nodes · 3,341 edges across 59 communities** (a
+structural AST pass over the code plus a semantic pass over the docs). Its most
+connected abstractions are exactly the ones the architecture leans on —
+`Position`, `Pitch`, and the `TenantScoped` mixin. Rebuild or query it via the
+`/graphify` skill:
+
+```
+/graphify                       # rebuild the graph for the current directory
+/graphify query "how does cross-tenant access return 404?"
+```
 
 ## Licence and data
 
