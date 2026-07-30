@@ -78,6 +78,10 @@ class Team(UUIDPk, Timestamped, TenantScoped, Base):
     #: Default shape, e.g. "4-3-3".
     default_formation: Mapped[str] = mapped_column(String(16), default="4-3-3")
 
+    #: Where this team came from, when a source other than the user supplied it.
+    #: Empty for teams created by hand. See app/services/external/base.py.
+    provenance: Mapped[dict] = mapped_column(JSON, default=dict)
+
     players: Mapped[list["Player"]] = relationship(
         back_populates="team", cascade="all, delete-orphan"
     )
@@ -105,8 +109,14 @@ class Player(UUIDPk, Timestamped, TenantScoped, Base):
     weight_kg: Mapped[int | None] = mapped_column(Integer, default=None)
 
     #: 0-99 scouting rating, the scale the reference UI uses.
-    overall_rating: Mapped[float] = mapped_column(Float, default=70.0)
-    potential_rating: Mapped[float] = mapped_column(Float, default=75.0)
+    #:
+    #: Nullable on purpose. Some sources publish a squad with no ratings at all —
+    #: a StatsBomb lineup names eleven real players and grades none of them — and
+    #: defaulting those to 70 would be the product inventing a measurement. An
+    #: unrated player is excluded from every ranking engine, with the reason
+    #: reported; see `features.is_rankable`.
+    overall_rating: Mapped[float | None] = mapped_column(Float, default=70.0)
+    potential_rating: Mapped[float | None] = mapped_column(Float, default=75.0)
 
     #: Fine-grained attributes: pace, passing, dribbling, defending, physical,
     #: shooting, stamina, aerial, work_rate_off, work_rate_def (all 0-99).
@@ -122,6 +132,11 @@ class Player(UUIDPk, Timestamped, TenantScoped, Base):
     injury_risk: Mapped[float] = mapped_column(Float, default=0.05)  # 0-1
     minutes_last_7d: Mapped[int] = mapped_column(Integer, default=0)
     is_available: Mapped[bool] = mapped_column(default=True)
+
+    #: Where this player came from, when a source other than the user supplied
+    #: them. Empty for players created by hand or imported from the club's own
+    #: CSV. See app/services/external/base.py.
+    provenance: Mapped[dict] = mapped_column(JSON, default=dict)
 
     team: Mapped["Team | None"] = relationship(back_populates="players")
     season_stats: Mapped[list["PlayerSeasonStat"]] = relationship(

@@ -26,6 +26,8 @@ class TeamCreate(BaseModel):
 class TeamOut(TeamCreate):
     model_config = ConfigDict(from_attributes=True)
     id: str
+    #: Empty unless an external source supplied this team.
+    provenance: dict = Field(default_factory=dict)
 
 
 # --- Players ---------------------------------------------------------------
@@ -41,8 +43,11 @@ class PlayerBase(BaseModel):
     preferred_foot: Foot = Foot.right
     height_cm: int | None = None
     weight_kg: int | None = None
-    overall_rating: float = Field(default=70.0, ge=0, le=99)
-    potential_rating: float = Field(default=75.0, ge=0, le=99)
+    # Nullable: a source can name a real player and grade none of them. `None`
+    # means "nobody has rated this player", which is a different claim from any
+    # number we could put here. See app/models/catalog.py.
+    overall_rating: float | None = Field(default=70.0, ge=0, le=99)
+    potential_rating: float | None = Field(default=75.0, ge=0, le=99)
     attributes: dict = Field(default_factory=dict)
     market_value_eur: int = 0
     wage_eur_per_year: int = 0
@@ -121,6 +126,8 @@ class PlayerOut(PlayerBase):
     display_name: str
     age: float | None = None
     line: str
+    #: Empty unless an external source supplied this player.
+    provenance: dict = Field(default_factory=dict)
 
 
 # --- Lineups ---------------------------------------------------------------

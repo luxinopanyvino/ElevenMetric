@@ -100,6 +100,64 @@ POSITION_BUCKET: dict[Position, str] = {
 }
 
 
+#: What every ranking engine assumes about a player it cannot grade. Used only
+#: as the last resort inside :func:`attribute` for a player that is not
+#: rankable at all — such a player never reaches an engine, because
+#: :func:`is_rankable` filters them out first.
+UNRANKED_FALLBACK = 70.0
+
+
+def rating(player) -> float | None:
+    """The player's current level, or ``None`` when nobody has graded them.
+
+    ``overall_rating`` is nullable: a source can name a real player and publish
+    no rating for them. Returning ``None`` rather than a plausible number is the
+    whole point — see :class:`app.models.catalog.Player`.
+    """
+    value = getattr(player, "overall_rating", None)
+    return None if value is None else float(value)
+
+
+def is_rankable(player) -> bool:
+    """Whether this player can be ordered against another.
+
+    False only for players imported from a source that publishes no ratings.
+    Every engine that ranks, selects or values players filters on this and
+    reports who it dropped, rather than ranking a fabricated 70.
+    """
+    return rating(player) is not None
+
+
+def rating_or(player, default: float) -> float:
+    """The player's rating, or ``default`` when they have none.
+
+    Distinct from ``rating(player) or default``: a rating of 0.0 is a real (if
+    unlikely) grade and must not be swapped for the default.
+    """
+    value = rating(player)
+    return default if value is None else value
+
+
+def split_rankable(players) -> tuple[list, list[dict]]:
+    """Partition a squad into the players an engine may rank, and the rest.
+
+    The second list is the engine's ``excluded`` report: who was left out and
+    why, so a thin result is explained rather than merely small.
+    """
+    rankable, excluded = [], []
+    for p in players:
+        if is_rankable(p):
+            rankable.append(p)
+        else:
+            excluded.append({
+                "player_id": getattr(p, "id", None),
+                "name": getattr(p, "display_name", None) or getattr(p, "name", "?"),
+                "reason": "no rating on file — the source that supplied this "
+                          "player publishes none, and one will not be invented",
+            })
+    return rankable, excluded
+
+
 def attribute(player, key: str, default: float | None = None) -> float:
     """Read an attribute, falling back sensibly when it was never supplied.
 
@@ -120,7 +178,7 @@ def attribute(player, key: str, default: float | None = None) -> float:
 
     if default is not None:
         return float(default)
-    return float(getattr(player, "overall_rating", 70.0))
+    return rating_or(player, UNRANKED_FALLBACK)
 
 
 def headline_from_detail(attrs: dict) -> dict:
@@ -176,7 +234,7 @@ def position_fit(player, target: Position) -> float:
 
     bucket = POSITION_BUCKET.get(target, "CM")
     weights = POSITION_WEIGHTS[bucket]
-    overall = float(getattr(player, "overall_rating", 70.0))
+    overall = rating_or(player, UNRANKED_FALLBACK)
     profile = sum(w * attribute(player, k, overall) for k, w in weights.items())
     # Normalise against the player's own overall: >1 means the profile suits the
     # role better than the player's average level suggests.
@@ -202,7 +260,7 @@ def effective_level(player, target: Position, performance_multiplier: float = 1.
     costs 6% of the rating, not 10%. Multiplying directly over-punishes small
     positional compromises, which are routine in real teamsheets.
     """
-    overall = float(getattr(player, "overall_rating", 70.0))
+    overall = rating_or(player, UNRANKED_FALLBACK)
     fit = position_fit(player, target)
     return overall * (1.0 - FIT_PENALTY * (1.0 - fit)) * performance_multiplier
 
@@ -322,15 +380,17 @@ def player_feature_vector(player, *, minute: int = 0, target: Position | None = 
     fs = fatigue_state(
         minutes_played=minute,
         age=getattr(player, "age", None),
-        stamina=attribute(player, "stamina", getattr(player, "overall_rating", 70.0)),
+        stamina=attribute(player, "stamina", rating(player)),
         minutes_last_7d=getattr(player, "minutes_last_7d", 0) or 0,
         baseline_fatigue=getattr(player, "fatigue", 0.0) or 0.0,
     )
-    overall = float(getattr(player, "overall_rating", 70.0))
+    overall = rating_or(player, UNRANKED_FALLBACK)
     fit = position_fit(player, target)
     return {
         "overall": overall,
-        "potential": float(getattr(player, "potential_rating", overall)),
+        "potential": float(getattr(player, "potential_rating", None)
+                           if getattr(player, "potential_rating", None) is not None
+                           else overall),
         "age": getattr(player, "age", None),
         "age_multiplier": age_curve(getattr(player, "age", None), getattr(player, "primary_position", None)),
         "fitness": float(getattr(player, "fitness", 100.0)),

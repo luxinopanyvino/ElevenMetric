@@ -12,7 +12,7 @@ from app.models.catalog import Player, Position, Team
 from app.models.match import InputSource, Lineup, LineupSlot, Match, MatchEvent, MatchState, TrackingFrame
 from app.schemas.ops import SimulationRequest, SimulationResponse
 from app.services.analytics.pitch import Pitch
-from app.services.ml.features import attribute
+from app.services.ml.features import attribute, is_rankable, rating_or
 from app.services.ml.lineup_optimizer import FORMATION_SLOTS, best_xi
 from app.services.simulation.engine import SimPlayer, TeamSetup, simulate
 
@@ -26,7 +26,10 @@ def _sim_player(player: Player) -> SimPlayer:
         id=player.id,
         name=player.display_name,
         position=player.primary_position,
-        rating=float(player.overall_rating),
+        # `_setup_from_team` has already excluded ungraded players, so the
+        # fallback here is unreachable in practice and only keeps the signature
+        # total.
+        rating=rating_or(player, 70.0),
         attributes=dict(player.attributes or {}),
         age=player.age,
         start_fatigue=float(player.fatigue or 0.0),
@@ -38,11 +41,16 @@ def _setup_from_team(scope: TenantScope, team: Team, formation: str,
                      press_height: float) -> TeamSetup:
     """Build a side from a real squad, using the optimiser to pick the XI."""
     players = scope.all(Player, Player.team_id == team.id)
-    available = [p for p in players if p.is_available]
+    available = [p for p in players if p.is_available and is_rankable(p)]
     if len(available) < 11:
-        raise HTTPException(
-            status_code=422,
-            detail=f"{team.name} has {len(available)} available players; 11 are needed.")
+        ungraded = sum(1 for p in players
+                       if p.is_available and not is_rankable(p))
+        detail = f"{team.name} has {len(available)} available players; 11 are needed."
+        if ungraded:
+            detail += (f" {ungraded} more are on file but carry no rating — the "
+                       "source that supplied them publishes none, and the engine "
+                       "will not invent one.")
+        raise HTTPException(status_code=422, detail=detail)
 
     xi = best_xi(available, formation, bench_size=9)
     by_id = {p.id: p for p in available}
@@ -226,6 +234,8 @@ def run(payload: SimulationRequest, scope: Scope) -> SimulationResponse:
     home = _setup_from_team(scope, home_team, home_formation, payload.home_press_height)
 
     opponent_is_synthetic = False
+    opponent_origin = "squad_on_file"
+    opponent_provenance: dict = {}
     if payload.away_team_id:
         away_team = scope.get(Team, payload.away_team_id)
         if away_team is None:
@@ -233,8 +243,15 @@ def run(payload: SimulationRequest, scope: Scope) -> SimulationResponse:
         if away_team.id == home_team.id:
             raise HTTPException(status_code=422, detail="A team cannot play itself")
         away = _setup_from_team(scope, away_team, away_formation, payload.away_press_height)
+        if away_team.provenance:
+            # A club imported from an external source is neither a squad this
+            # club entered nor a stand-in the engine invented. Reporting it as
+            # either would misstate what was actually played.
+            opponent_origin = "imported"
+            opponent_provenance = dict(away_team.provenance)
     else:
         opponent_is_synthetic = True
+        opponent_origin = "generated"
         away = _synthetic_opponent(
             payload.away_name or "Opposition", away_formation,
             payload.away_strength, payload.away_press_height, payload.seed + 1)
@@ -250,12 +267,25 @@ def run(payload: SimulationRequest, scope: Scope) -> SimulationResponse:
 
     match_id = _persist(scope, result, home_team, payload) if payload.persist else None
 
+    notes = {
+        "generated": "The opposition was generated at the level you chose, not "
+                     "taken from a squad on file.",
+        "squad_on_file": "Both sides were played from their real squads.",
+        "imported": (
+            f"The opposition is a real squad imported from "
+            f"{opponent_provenance.get('source', 'an external source')}"
+            f" ({opponent_provenance.get('edition', 'unknown edition')}), read "
+            f"{opponent_provenance.get('retrieved_at', 'at an unrecorded time')}. "
+            f"{opponent_provenance.get('note', '')}".strip()
+        ),
+    }
+
     return SimulationResponse(
         match_id=match_id,
         opponent_is_synthetic=opponent_is_synthetic,
+        opponent_origin=opponent_origin,
+        opponent_provenance=opponent_provenance,
         summary=result.summary(),
         playback=result.playback(),
-        note=("The opposition was generated at the level you chose, not taken from "
-              "a squad on file." if opponent_is_synthetic else
-              "Both sides were played from their real squads."),
+        note=notes[opponent_origin],
     )

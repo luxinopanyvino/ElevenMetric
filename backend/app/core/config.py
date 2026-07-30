@@ -46,7 +46,31 @@ class Settings(BaseSettings):
     pitch_length_m: float = 105.0
     pitch_width_m: float = 68.0
 
-    @field_validator("cors_origins", mode="before")
+    # --- External data sources ---------------------------------------------
+    #
+    # Off by default. When enabled the API makes outbound requests to the hosts
+    # listed in `external_hosts` on behalf of the operator, who is responsible
+    # for their own compliance with those sites' terms. Nothing is fetched
+    # unless a user explicitly asks for an import; there is no background job.
+    # See docs/EXTERNAL_SOURCES.md.
+    external_fetch_enabled: bool = False
+    external_hosts: list[str] = Field(
+        default_factory=lambda: ["sofifa.com", "github.com", "githubusercontent.com"]
+    )
+    #: Seconds between consecutive requests to the same host.
+    external_rate_limit_s: float = 1.0
+    external_timeout_s: float = 20.0
+    #: Fetched responses are cached here with their retrieval timestamp, so a
+    #: repeated preview costs nothing and every row can say when it was read.
+    external_cache_dir: Path = PROJECT_DIR / "data" / "external-cache"
+    external_cache_ttl_hours: float = 24.0
+    #: Sent on every outbound request. Identify your deployment honestly.
+    external_user_agent: str = (
+        "ElevenMetric/1.0 (self-hosted football analysis; "
+        "+https://github.com/luxinopanyvino/ElevenMetric)"
+    )
+
+    @field_validator("cors_origins", "external_hosts", mode="before")
     @classmethod
     def _split_origins(cls, v):
         if isinstance(v, str):

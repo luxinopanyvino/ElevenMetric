@@ -434,7 +434,11 @@ export async function render(root, state) {
     updateControls();
 
     return el('div', {},
-      ui.result.opponent_is_synthetic ? note(ui.result.note, 'warn') : note(ui.result.note),
+      /* Three kinds of opponent, three labels. A generated stand-in and an
+       * imported real squad are different claims about what was played, and
+       * the banner has to say which. */
+      note(ui.result.note,
+        ui.result.opponent_origin === 'squad_on_file' ? undefined : 'warn'),
 
       el('div', { class: 'grid two' },
         el('section', { class: 'card' },

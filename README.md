@@ -51,10 +51,21 @@ pip install -r requirements-cv.txt     # opencv, ultralytics, scipy
 Without them the API still runs; video jobs report `engine="simulated"` and the
 UI says so in as many words. See [docs/CV.md](docs/CV.md).
 
+### Optional: the external data sources
+
+```bash
+pip install -r requirements-external.txt   # statsbombpy
+```
+
+Enables importing real fixtures from StatsBomb open data. The SoFIFA reader
+needs nothing beyond the standard library. Without either, the API still runs
+and each source reports itself unavailable with the reason and the remedy. See
+[docs/EXTERNAL_SOURCES.md](docs/EXTERNAL_SOURCES.md).
+
 ### Tests
 
 ```bash
-cd backend && python -m pytest         # 205 tests
+cd backend && python -m pytest         # 250 tests
 ```
 
 ---
@@ -79,7 +90,7 @@ The short version:
 
 ### Getting data in
 
-Three routes, all in the **Import data** tab:
+Four routes, all in the **Import data** tab:
 
 * **CSV** — six datasets (squad, market pool, academy players, academy
   assessments, match events, tracking). Headers are matched case-insensitively
@@ -88,6 +99,17 @@ Three routes, all in the **Import data** tab:
   per-row errors with the offending value, and the first rows as they would be
   stored. A file with any bad row is refused unless you explicitly opt into a
   partial import. Templates download from the same panel.
+* **Real teams** — import a real club or a real fixture from a public source,
+  so a fresh install has something to analyse without a file to prepare. Two
+  sources, and the product never lets them blur: **SoFIFA** supplies EA FC 26
+  club squads with the full attribute profile — pick a real club and play it in
+  the simulator — and **StatsBomb open data** supplies real fixtures with both
+  lineups and a tier-2 event feed. A SoFIFA rating is a games studio's opinion,
+  not a measurement; StatsBomb publishes no ratings at all, so players imported
+  from it are stored **unrated** and excluded from selection rather than given
+  an invented 70. Every imported row carries its source and when it was read.
+  Off by default and usable offline from a saved file — see
+  [docs/EXTERNAL_SOURCES.md](docs/EXTERNAL_SOURCES.md).
 * **By hand** — a full player editor (identity, contract, load, all 41
   attributes), club budgets, and team creation.
 * **Video** — upload footage; see [docs/CV.md](docs/CV.md).
@@ -118,7 +140,7 @@ backend/app/
 ├── core/            config, JWT auth, tenant scoping
 ├── db/              SQLAlchemy models, session, demo seed
 ├── api/v1/          auth · squad · matches · analysis · transfers · academy
-│                    · ingest · simulation · meta
+│                    · ingest · external · simulation · meta
 ├── schemas/         Pydantic request/response models
 └── services/
     ├── analytics/   pitch geometry · xG/xT · possession · formation · tactics · heatmaps
@@ -126,6 +148,7 @@ backend/app/
     ├── cv/          detector · tracker · homography · kit classifier · simulator
     ├── simulation/  the match engine behind the Match sim tab
     ├── ingest/      CSV parsing and validation, as pure functions over bytes
+    ├── external/    SoFIFA and StatsBomb adapters behind one shape, plus provenance
     ├── orchestrator.py     routes inputs → models → a report with honest confidence
     └── data_requirements.py  the input contract, as data
 frontend/            vanilla HTML/CSS/JS — no build step, no runtime dependencies
@@ -220,8 +243,16 @@ The system is designed so it cannot quietly overstate what it knows:
 - Simulated output is labelled `engine="simulated"` from the job record through
   to the report summary and the UI banner.
 - A simulated fixture is stored as a simulation — competition, provider and match
-  notes all say so — and a generated opponent is reported as generated, in the
-  API response and on screen, rather than passed off as a squad on file.
+  notes all say so — and the simulator reports three kinds of opponent, not two:
+  a squad on file, a real squad **imported** from a named source, or a
+  **generated** stand-in.
+- Data imported from an external source carries a `provenance` record on the
+  team, the player and the match: which source, which edition, the source's own
+  id, and when it was read. A SoFIFA rating is labelled as a video game's
+  opinion rather than a measurement, wherever it drives a recommendation.
+- A player nobody has graded has `overall_rating = null`, not 70. StatsBomb
+  names real players and rates none of them; rather than invent a level, the
+  ranking engines **exclude** those players and report who they dropped.
 - Where a model is knowingly unrealistic, the docs say so and the test asserts a
   ceiling rather than pretending the behaviour is correct.
 - Every recommendation carries the numbers behind it under `evidence`.

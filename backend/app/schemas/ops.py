@@ -214,6 +214,13 @@ class SimulationRequest(BaseModel):
 class SimulationResponse(BaseModel):
     match_id: str | None
     opponent_is_synthetic: bool
+    #: Where the opposition came from: "squad_on_file", "imported" or
+    #: "generated". Three states, not two — an imported real squad is neither a
+    #: squad the club entered nor a stand-in, and calling it either would
+    #: misrepresent the fixture.
+    opponent_origin: str = "squad_on_file"
+    #: Set for an imported opponent: the source, edition and when it was read.
+    opponent_provenance: dict = Field(default_factory=dict)
     summary: dict
     playback: dict
     note: str

@@ -15,6 +15,9 @@ data/*.db-shm
 data/*.db-wal
 data/media/
 data/models/
+# Responses cached from external sources. Regenerable, potentially large, and
+# someone else's content — see docs/EXTERNAL_SOURCES.md.
+data/external-cache/
 
 # Environment
 .env

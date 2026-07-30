@@ -22,7 +22,7 @@ import numpy as np
 
 from app.models.academy import Pathway
 from app.models.catalog import POSITION_LINE, Position
-from app.services.ml.features import age_curve, position_fit
+from app.services.ml.features import age_curve, is_rankable, position_fit
 from app.services.ml.registry import get_model
 
 #: Composite ability considered first-team standard by default. Overridden per
@@ -89,6 +89,7 @@ def first_team_bar(senior_players: list, position: Position | None = None) -> fl
     weakest quarter), because a prospect displaces the bottom of the roster
     before they displace a starter.
     """
+    senior_players = [p for p in (senior_players or []) if is_rankable(p)]
     if not senior_players:
         return DEFAULT_FIRST_TEAM_BAR
     pool = senior_players

@@ -14,10 +14,13 @@ import numpy as np
 
 from app.models.catalog import POSITION_ANCHOR, Position
 from app.services.ml.features import (
+    UNRANKED_FALLBACK as UNRANKED,
     attribute,
     effective_level,
     fatigue_state,
     position_fit,
+    rating_or,
+    split_rankable,
 )
 
 #: Slot templates per formation, ordered GK → back → middle → front.
@@ -142,6 +145,8 @@ class XIAssignment:
     mean_effective_level: float = 0.0
     balance: dict = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    #: Players the optimiser refused to rank, and why. See `features.split_rankable`.
+    excluded: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -152,6 +157,7 @@ class XIAssignment:
             "mean_effective_level": round(self.mean_effective_level, 2),
             "balance": self.balance,
             "warnings": self.warnings,
+            "excluded": self.excluded,
         }
 
 
@@ -175,7 +181,7 @@ def _player_slot_value(
     fs = fatigue_state(
         minutes_played=minute,
         age=getattr(player, "age", None),
-        stamina=attribute(player, "stamina", player.overall_rating),
+        stamina=attribute(player, "stamina", rating_or(player, UNRANKED)),
         minutes_last_7d=getattr(player, "minutes_last_7d", 0) or 0,
         baseline_fatigue=getattr(player, "fatigue", 0.0) or 0.0,
     )
@@ -207,8 +213,17 @@ def best_xi(
     if slots is None:
         raise ValueError(f"Unknown formation '{formation}'. Known: {sorted(FORMATION_SLOTS)}")
 
-    available = [p for p in players if getattr(p, "is_available", True)]
-    result = XIAssignment(formation=formation)
+    # An ungraded player cannot be ordered against a graded one, and inventing a
+    # rating to make the maths work is exactly what this product must not do.
+    rankable, excluded = split_rankable(
+        [p for p in players if getattr(p, "is_available", True)])
+    available = rankable
+    result = XIAssignment(formation=formation, excluded=excluded)
+    if excluded:
+        result.warnings.append(
+            f"{len(excluded)} available player(s) were left out of selection "
+            "because no rating is on file for them."
+        )
 
     if len(available) < len(slots):
         result.warnings.append(
@@ -320,8 +335,8 @@ def _balance(slots: list[dict], players: list) -> dict:
             lefties += 1
         elif foot == "right":
             righties += 1
-        pace_vals.append(attribute(p, "pace", p.overall_rating))
-        defend_vals.append(attribute(p, "defending", p.overall_rating))
+        pace_vals.append(attribute(p, "pace", rating_or(p, UNRANKED)))
+        defend_vals.append(attribute(p, "defending", rating_or(p, UNRANKED)))
 
     return {
         "left_footed": lefties,
